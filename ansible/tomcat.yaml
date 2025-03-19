@@ -1,0 +1,76 @@
+---
+- name: Install Apache Tomcat
+  hosts: ubuntu_servers
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Install required dependencies
+      apt:
+        name:
+          - openjdk-11-jdk
+        state: present
+
+    - name: Download Tomcat
+      get_url:
+        url: https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.102/bin/apache-tomcat-9.0.102.tar.gz
+        dest: /tmp/apache-tomcat-9.0.102.tar.gz
+
+    - name: Extract Tomcat archive
+      unarchive:
+        src: /tmp/apache-tomcat-9.0.102.tar.gz
+        dest: /opt/
+        remote_src: yes
+
+    - name: Rename Tomcat directory
+      command:
+        cmd: mv /opt/apache-tomcat-9.0.102  /opt/tomcat
+
+    - name: Set permissions for Tomcat directory
+      file:
+        path: /opt/tomcat
+        owner: root
+        group: root
+        mode: '0755'
+        recurse: yes
+
+    - name: Create Tomcat service file
+      copy:
+        dest: /etc/systemd/system/tomcat.service
+        content: |
+          [Unit]
+          Description=Apache Tomcat Web Application Container
+          After=network.target
+
+          [Service]
+          Type=forking
+          Environment=JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
+          Environment=CATALINA_PID=/opt/tomcat/temp/tomcat.pid
+          Environment=CATALINA_HOME=/opt/tomcat
+          Environment=CATALINA_BASE=/opt/tomcat
+          ExecStart=/opt/tomcat/bin/startup.sh
+          ExecStop=/opt/tomcat/bin/shutdown.sh
+          User=root
+          Group=root
+          UMask=0007
+          RestartSec=10
+          Restart=always
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd to recognize Tomcat service
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable Tomcat to start on boot
+      systemd:
+        name: tomcat
+        enabled: yes
+
+    - name: Start Tomcat service
+      systemd:
+        name: tomcat
+        state: started
